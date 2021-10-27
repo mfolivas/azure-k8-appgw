@@ -60,7 +60,7 @@ az network vnet create \
 az network application-gateway create \
   --name $appgwName --location $location \
   --resource-group $resourceGroup \
-  --sku Standard_v2 \
+  --sku WAF_v2 \
   --public-ip-address $appgwPublicIpName \
   --vnet-name $vnetName \
   --subnet $subnetName
