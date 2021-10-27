@@ -1,3 +1,4 @@
+# https://docs.microsoft.com/en-us/azure/application-gateway/tutorial-ingress-controller-add-on-existing
 # Create a resource group
 # Create a new AKS cluster
 # Create a new Application Gateway
@@ -7,13 +8,14 @@
 # Deploy a sample application using AGIC for Ingress on the AKS cluster
 # Check that the application is reachable through Application Gateway
 
+
 resourceGroup=demoAksClusterResourceGroup
 aksCluster=demoAksCluster
 totalNodes=2
 location=eastus
 appgwName=demok8sappgw
 appgwPublicIpName=demoAppgwIP
-k8sVnet=appgwsvnet
+vnetName=appgwsvnet
 subnetName=appgwsubnet
 
 az login
@@ -22,86 +24,106 @@ az login
 az group create --name $resourceGroup --location $location
 
 # deploy a new AKS cluster
-az aks create --name $aksCluster \
-  --resource-group $resourceGroup \
-  --node-count $totalNodes \
-  --enable-addons monitoring \
-  --generate-ssh-keys
+az aks create -n $aksCluster --resource-group $resourceGroup --network-plugin azure --enable-managed-identity 
+
+# az aks create --name $aksCluster \
+#   --resource-group $resourceGroup \
+#   --node-count $totalNodes \
+#   --enable-addons monitoring \
+#   --network-plugin azure \
+#   --enable-managed-identity \
+#   --generate-ssh-keys
 
 az aks show --name $aksCluster --resource-group $resourceGroup
 
-# Connect to the cluster
+# connecto to the cluster
 az aks get-credentials --resource-group $resourceGroup --name $aksCluster --overwrite-existing
 
-# deploy a new Application Gateway
-# create public ip for app gateway
+# When using an AKS cluster and Application Gateway in separate virtual networks,
+# the address spaces of the two virtual networks must not overlap. 
+# The default address space that an AKS cluster deploys in is 10.0.0.0/8, 
+# so we set the Application Gateway virtual network address prefix to 11.0.0.0/8.
+
 az network public-ip create \
-  --resource-group $resourceGroup \
   --name $appgwPublicIpName \
+  --resource-group $resourceGroup \
   --allocation-method Static \
   --sku Standard
 
-# create a new virtual network
 az network vnet create \
+  --name $vnetName \
   --resource-group $resourceGroup \
-  --location $location \
-  --name $subnetName \
-  --address-prefix 10.242.0.0/16 \
-  --subnet-name $k8sVnet
+  --address-prefix 11.0.0.0/8 \
+  --subnet-name $subnetName \
+  --subnet-prefix 11.1.0.0/16 
 
-# create the application gateway
 az network application-gateway create \
-  --name $appgwName \
-  --location $location \
+  --name $appgwName --location $location \
   --resource-group $resourceGroup \
-  --vnet-name $k8sVnet \
-  --subnet $subnetName \
-  --capacity 2 \
-  --sku WAF_v2 \
-  --http-settings-cookie-based-affinity Disabled \
-  --frontend-port 80 \
-  --http-settings-port 80 \
-  --http-settings-protocol Http \
-  --public-ip-address $appgwPublicIpName
+  --sku Standard_v2 \
+  --public-ip-address $appgwPublicIpName \
+  --vnet-name $vnetName \
+  --subnet $subnetName
 
-# enable the AGIC
-# enable the AGIC add-on in the AKS cluster and specify the AGIC add-on to use
-# the existing applicagion gateway you created
-appgwId=$(az network application-gateway show --name $appgwName -g $resourceGroup -o tsv --query "id") 
-az aks enable-addons -n $aksCluster -g $resourceGroup -a ingress-appgw --appgw-id $appgwId
+# az network application-gateway create \
+#   --name $appgwName \
+#   --location $location \
+#   --resource-group $resourceGroup \
+#   --sku WAF_v2 \
+#   --public-ip-address $appgwPublicIpName \
+#   --vnet-name $vnetName \
+#   --subnet $subnetName \
+#   --http-settings-cookie-based-affinity Disabled \
+#   --frontend-port 80 \
+#   --http-settings-port 80 \
+#   --http-settings-protocol Http 
 
-# peer the two virtual networks together
-# since we deployed the AKS cluster in its own virtual network and the
-# Application Gateway in another virtual network, we'll need to peer the two
-# virtual networks together in order for traffic to flow from the 
-# Application Gateway to the pods in the cluster
-nodeResourceGroup=$(az aks show -n $aksCluster -g $resourceGroup -o tsv --query "nodeResourceGroup")
-aksVnetName=$(az network vnet list -g $nodeResourceGroup -o tsv --query "[0].name")
 
-aksVnetId=$(az network vnet show -n $aksVnetName -g $nodeResourceGroup -o tsv --query "id")
-# create a peering connection from the Application Gateway virtual network to the AKS virtual network
-# Peering the two virtual networks requires running the Azure CLI command two separate times, 
+# Enable the AGIC add-on in existing AKS cluster
+appgwId=$(az network application-gateway show --name $appgwName --resource-group $resourceGroup -o tsv --query "id")
+az aks enable-addons \
+  --name $aksCluster \
+  --resource-group $resourceGroup \
+  -a ingress-appgw \
+  --appgw-id $appgwId
+
+# Peer the two virtual networks together
+# Peering the two virtual networks requires running the Azure CLI command two separate times
 # to ensure that the connection is bi-directional. 
-
-# The first command will create a peering connection from the 
-# Application Gateway virtual network to the AKS virtual network; 
+# The first command will create a peering connection from the Application Gateway 
+# virtual network to the AKS virtual network
 # the second command will create a peering connection in the other direction.
+nodeResourceGroup=$(az aks show --name $aksCluster --resource-group $resourceGroup -o tsv --query "nodeResourceGroup")
+aksVnetName=$(az network vnet list --resource-group $nodeResourceGroup -o tsv --query "[0].name")
+
+aksVnetId=$(az network vnet show --name $aksVnetName --resource-group $nodeResourceGroup -o tsv --query "id")
 az network vnet peering create \
-  --name appGWtoAKSVnetPeering \
+  --name AppGWtoAKSVnetPeering \
   --resource-group $resourceGroup \
-  --vnet-name $subnetName \
+  --vnet-name $vnetName \
   --remote-vnet $aksVnetId \
   --allow-vnet-access
 
-
-appGWVnetId=$(az network vnet show -n $appGwToAksVnetName -g $nodeResourceGroup -o tsv --query "id")
-
-# create a peering connection in the other direction
-az network vnet peering create --name AKStoAppGWVnetPeering \
-  -g $nodeResourceGroup \
+appGWVnetId=$(az network vnet show --name $vnetName --resource-group $resourceGroup -o tsv --query "id")
+az network vnet peering create \
+  --name AKStoAppGWVnetPeering \
+  --resource-group $nodeResourceGroup \
   --vnet-name $aksVnetName \
-  --remote-vnet $aksVnetId \
+  --remote-vnet $appGWVnetId \
   --allow-vnet-access
 
+# Deploy a sample application using AGIC
+az aks get-credentials --name $aksCluster --resource-group $resourceGroup
 
+# set up a sample application that uses AGIC for Ingress to the cluster. 
+# AGIC will update the Application Gateway you set up earlier with 
+# corresponding routing rules to the new sample application you deployed.
+kubectl apply -f https://raw.githubusercontent.com/Azure/application-gateway-kubernetes-ingress/master/docs/examples/aspnetapp.yaml 
+
+# verify that your application is reachable
+# Get the IP address of the Ingress.
+
+kubectl get ingress
+
+# clean resources
 az group delete --name $resourceGroup --yes --no-wait
