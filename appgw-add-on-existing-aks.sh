@@ -13,6 +13,7 @@ totalNodes=2
 location=eastus
 appgwName=demok8sappgw
 appgwPublicIpName=demoAppgwIP
+k8sVnet=appgwsvnet
 subnetName=appgwsubnet
 
 az login
@@ -79,14 +80,28 @@ aksVnetName=$(az network vnet list -g $nodeResourceGroup -o tsv --query "[0].nam
 
 aksVnetId=$(az network vnet show -n $aksVnetName -g $nodeResourceGroup -o tsv --query "id")
 # create a peering connection from the Application Gateway virtual network to the AKS virtual network
-az network vnet peering create --name appGWtoAKSVnetPeering \
+# Peering the two virtual networks requires running the Azure CLI command two separate times, 
+# to ensure that the connection is bi-directional. 
+
+# The first command will create a peering connection from the 
+# Application Gateway virtual network to the AKS virtual network; 
+# the second command will create a peering connection in the other direction.
+az network vnet peering create \
+  --name appGWtoAKSVnetPeering \
+  --resource-group $resourceGroup \
+  --vnet-name $subnetName \
+  --remote-vnet $aksVnetId \
+  --allow-vnet-access
+
+
+appGWVnetId=$(az network vnet show -n $appGwToAksVnetName -g $nodeResourceGroup -o tsv --query "id")
+
+# create a peering connection in the other direction
+az network vnet peering create --name AKStoAppGWVnetPeering \
   -g $nodeResourceGroup \
   --vnet-name $aksVnetName \
   --remote-vnet $aksVnetId \
   --allow-vnet-access
 
-appGWVnetId=$(az network vnet show -n myVnet -g myResourceGroup -o tsv --query "id")
-# create a peering connection in the other direction
-az network vnet peering create --name AKStoAppGWVnetPeering -g $nodeResourceGroup --vnet-name $aksVnetName --remote-vnet $appGWVnetId --allow-vnet-access
 
 az group delete --name $resourceGroup --yes --no-wait
