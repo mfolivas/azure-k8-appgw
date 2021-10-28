@@ -26,14 +26,6 @@ az group create --name $resourceGroup --location $location
 # deploy a new AKS cluster
 az aks create -n $aksCluster --resource-group $resourceGroup --network-plugin azure --enable-managed-identity 
 
-# az aks create --name $aksCluster \
-#   --resource-group $resourceGroup \
-#   --node-count $totalNodes \
-#   --enable-addons monitoring \
-#   --network-plugin azure \
-#   --enable-managed-identity \
-#   --generate-ssh-keys
-
 az aks show --name $aksCluster --resource-group $resourceGroup
 
 # connecto to the cluster
@@ -64,19 +56,6 @@ az network application-gateway create \
   --public-ip-address $appgwPublicIpName \
   --vnet-name $vnetName \
   --subnet $subnetName
-
-# az network application-gateway create \
-#   --name $appgwName \
-#   --location $location \
-#   --resource-group $resourceGroup \
-#   --sku WAF_v2 \
-#   --public-ip-address $appgwPublicIpName \
-#   --vnet-name $vnetName \
-#   --subnet $subnetName \
-#   --http-settings-cookie-based-affinity Disabled \
-#   --frontend-port 80 \
-#   --http-settings-port 80 \
-#   --http-settings-protocol Http 
 
 
 # Enable the AGIC add-on in existing AKS cluster
