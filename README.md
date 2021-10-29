@@ -63,3 +63,16 @@ The architecture of the Application Gateway Ingress Controller differs from that
 - An in-cluster load balancer performs all data path operations leveraging the Kubernetes cluster’s compute resources. It competes for resources with the business apps it is fronting. In-cluster ingress controllers create Kubernetes Service Resources and leverage kubenet for network traffic. In comparison to Ingress Controller, traffic flows through an extra hop.
 
 - Application Gateway Ingress Controller leverages the AKS' advanced networking, which allocates an IP address for each pod from the subnet shared with Application Gateway. Application Gateway Ingress Controller has direct access to all Kubernetes pods. This eliminates the need for data to pass through kubenet.
+
+
+Reference
+https://docs.microsoft.com/en-us/azure/aks/ingress-internal-ip#create-an-ingress-controller
+https://docs.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview
+https://docs.microsoft.com/en-us/azure/aks/kubernetes-helm
+https://docs.microsoft.com/en-us/azure/container-registry/container-registry-helm-repos
+https://docs.microsoft.com/en-us/azure/aks/ingress-internal-ip
+https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-azure-cli
+https://stacksimplify.com/azure-aks/azure-kubernetes-service-ingress-basics/
+https://docs.microsoft.com/en-us/azure/aks/ingress-basic
+https://kubernetes.io/docs/concepts/services-networking/ingress/
+https://docs.microsoft.com/en-us/azure/architecture/example-scenario/aks-agic/aks-agic

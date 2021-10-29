@@ -32,7 +32,98 @@ az aks create --name $aksCluster \
 az aks show --name $aksCluster --resource-group $resourceGroup
 
 # connecto to the cluster
-az aks get-credentials --resource-group $resourceGroup --name $aksCluster --overwrite-existing
+az aks get-credentials \
+  --resource-group $resourceGroup \
+  --name $aksCluster \
+  --overwrite-existing
+
+# add a NGINX ingress controller leveraging Helm 3 - helm version
+# use the helm repo command to add the ingress-nginx repository
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+
+helm search repo ingress-nginx
+
+# Create an ACR instance 
+containerRegistryName=appgwContainerRegistry$(date '+%Y%m%d')
+az acr create --resource-group $resourceGroup \
+  --name $containerRegistryName --sku Basic
+
+# Import the images used by the Helm chart into your ACR
+
+CONTROLLER_REGISTRY=k8s.gcr.io
+CONTROLLER_IMAGE=ingress-nginx/controller
+CONTROLLER_TAG=v0.48.1
+PATCH_REGISTRY=docker.io
+PATCH_IMAGE=jettech/kube-webhook-certgen
+PATCH_TAG=v1.5.1
+DEFAULTBACKEND_REGISTRY=k8s.gcr.io
+DEFAULTBACKEND_IMAGE=defaultbackend-amd64
+DEFAULTBACKEND_TAG=1.5
+
+az acr import --name $containerRegistryName --source $CONTROLLER_REGISTRY/$CONTROLLER_IMAGE:$CONTROLLER_TAG --image $CONTROLLER_IMAGE:$CONTROLLER_TAG
+az acr import --name $containerRegistryName --source $PATCH_REGISTRY/$PATCH_IMAGE:$PATCH_TAG --image $PATCH_IMAGE:$PATCH_TAG
+az acr import --name $containerRegistryName --source $DEFAULTBACKEND_REGISTRY/$DEFAULTBACKEND_IMAGE:$DEFAULTBACKEND_TAG --image $DEFAULTBACKEND_IMAGE:$DEFAULTBACKEND_TAG
+
+acrloginServer=$(az acr show --name $containerRegistryName -o tsv --query loginServer)
+
+# run helm charts
+# Create a namespace for your ingress resources
+k8namespace=appgw-sample
+kubectl create namespace $k8namespace
+
+kubectl --namespace $k8namespace get services -o wide
+
+helm uninstall $helmIngressRelease --namespace $k8namespace
+
+# deploy an NGINX ingress controller
+
+# Error: INSTALLATION FAILED: failed pre-install: timed out waiting for the condition
+# helm install nginx-ingress ingress-nginx/ingress-nginx \
+#     --namespace $k8namespace \
+#     --set controller.replicaCount=2 \
+#     --set controller.nodeSelector."kubernetes\.io/os"=linux \
+#     --set controller.image.registry=$acrloginServer \
+#     --set controller.image.image=$CONTROLLER_IMAGE \
+#     --set controller.image.tag=$CONTROLLER_TAG \
+#     --set controller.image.digest="" \
+#     --set controller.admissionWebhooks.patch.nodeSelector."kubernetes\.io/os"=linux \
+#     --set controller.admissionWebhooks.patch.image.registry=$acrloginServer \
+#     --set controller.admissionWebhooks.patch.image.image=$PATCH_IMAGE \
+#     --set controller.admissionWebhooks.patch.image.tag=$PATCH_TAG \
+#     --set defaultBackend.nodeSelector."kubernetes\.io/os"=linux \
+#     --set defaultBackend.image.registry=$acrloginServer \
+#     --set defaultBackend.image.image=$DEFAULTBACKEND_IMAGE \
+#     --set defaultBackend.image.tag=$DEFAULTBACKEND_TAG
+
+helm install nginx-ingress ingress-nginx/ingress-nginx \
+    --namespace $k8namespace \
+    --set controller.replicaCount=2 \
+    --set controller.nodeSelector."kubernetes\.io/os"=linux \
+    --set controller.image.digest="" \
+    --set controller.admissionWebhooks.patch.nodeSelector."kubernetes\.io/os"=linux \
+    --set defaultBackend.nodeSelector."kubernetes\.io/os"=linux 
+
+# check that the public ip of the ELB was created
+# It takes a few minutes for the IP address to be assigned to the service
+kubectl --namespace $k8namespace get services -o wide -w nginx-ingress-ingress-nginx-controller
+
+# the result should be something like this:
+# NAME                                     TYPE           CLUSTER-IP    EXTERNAL-IP     PORT(S)                      AGE   SELECTOR
+# nginx-ingress-ingress-nginx-controller   LoadBalancer   10.0.108.231   20.85.201.27   80:32766/TCP,443:30609/TCP   27s   app.kubernetes.io/component=controller,app.kubernetes.io/instance=nginx-ingress,app.kubernetes.io/name=ingress-nginx
+
+# run some demo application
+kubectl apply -f aks-helloworld.yaml --namespace $k8namespace
+kubectl apply -f ingress-demo.yaml --namespace $k8namespace
+
+# Create an ingress route
+kubectl apply -f hello-world-ingress.yaml
+# Traffic to the address http://<EXTERNAL_IP>/ is routed to the service named aks-helloworld.
+# Traffic to the address http://<EXTERNAL_IP>/hello-world-two is routed to the ingress-demo service
+
+# Now we will create a application gateway
+# To route traffic to each application, create a Kubernetes ingress resource.
+# The ingress resource configures the rules that route traffic to one of the two applications.
+
 
 # When using an AKS cluster and Application Gateway in separate virtual networks,
 # the address spaces of the two virtual networks must not overlap. 
@@ -100,12 +191,15 @@ az aks get-credentials --name $aksCluster --resource-group $resourceGroup
 # set up a sample application that uses AGIC for Ingress to the cluster. 
 # AGIC will update the Application Gateway you set up earlier with 
 # corresponding routing rules to the new sample application you deployed.
-kubectl apply -f https://raw.githubusercontent.com/Azure/application-gateway-kubernetes-ingress/master/docs/examples/aspnetapp.yaml 
+kubectl apply -f aspnetapp.yaml 
 
 # verify that your application is reachable
 # Get the IP address of the Ingress.
 
-kubectl get ingress
+kubectl get ingress --namespace $k8namespace
+# NAME                  CLASS    HOSTS   ADDRESS         PORTS   AGE
+# aspnetapp             <none>   *       52.152.173.37   80      58s
+# hello-world-ingress   <none>   *       20.85.201.27    80      21m
 
 # clean resources
 az group delete --name $resourceGroup --yes --no-wait
