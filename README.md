@@ -66,8 +66,7 @@ The architecture of the Application Gateway Ingress Controller differs from that
 
 References:
 
-https://docs.microsoft.com/en-us/azure/aks/
-ingress-internal-ip#create-an-ingress-controller
+https://docs.microsoft.com/en-us/azure/aks/ingress-internal-ip#create-an-ingress-controller
 https://docs.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview
 https://docs.microsoft.com/en-us/azure/aks/kubernetes-helm
 https://docs.microsoft.com/en-us/azure/container-registry/container-registry-helm-repos
