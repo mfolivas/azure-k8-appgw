@@ -73,7 +73,7 @@ kubectl create namespace $k8namespace
 
 kubectl --namespace $k8namespace get services -o wide
 
-helm uninstall $helmIngressRelease --namespace $k8namespace
+# helm uninstall $helmIngressRelease --namespace $k8namespace
 
 # deploy an NGINX ingress controller
 
@@ -201,5 +201,49 @@ kubectl get ingress --namespace $k8namespace
 # aspnetapp             <none>   *       52.152.173.37   80      58s
 # hello-world-ingress   <none>   *       20.85.201.27    80      21m
 
+
+# create front door
+# need to have the front door extension installed before
+az extension add --name front-door
+
+frondoorname=appgwdemofrontdoor
+az network front-door check-name-availability --name $frondoorname --resource-type Microsoft.Network/frontDoors
+
+az network front-door create \
+  --resource-group $nodeResourceGroup \
+  --name $frondoorname \
+  --backend-address 52.152.173.37
+
+# create a WAF policy
+wafpolicyname=IPAllowPolicyExampleCLI
+az network front-door waf-policy create \
+  --name $wafpolicyname \
+  --resource-group $nodeResourceGroup 
+
+# create an IP allow rule for the policy created from the previous step.
+# --defer is required because a rule must have a match condition to be added in the next step
+az network front-door waf-policy rule create \
+  --action Block \
+  --name IPAllowListRule \
+  --policy-name $wafpolicyname \
+  --priority 1 \
+  --resource-group $nodeResourceGroup  \
+  --rule-type MatchRule \
+  --defer
+
+# Next, add match condition to the rule:
+az network front-door waf-policy rule match-condition add \
+  --name IPAllowListRule \
+  --operator IPMatch \
+  --policy-name $wafpolicyname \
+  --resource-group $nodeResourceGroup \
+  --values "196.16.223.27" "103.228.197.79" \
+  --match-variable RemoteAddr \
+  --negate true
+
+# find the ids of the WAF policies
+az network front-door  waf-policy show --resource-group $nodeResourceGroup --name $wafpolicyname
+
 # clean resources
+helm uninstall $helmIngressRelease --namespace $k8namespace
 az group delete --name $resourceGroup --yes --no-wait
