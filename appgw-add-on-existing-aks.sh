@@ -24,7 +24,10 @@ az login
 az group create --name $resourceGroup --location $location
 
 # deploy a new AKS cluster
-az aks create -n $aksCluster --resource-group $resourceGroup --network-plugin azure --enable-managed-identity 
+az aks create --name $aksCluster \
+  --resource-group $resourceGroup \
+  --network-plugin azure \
+  --enable-managed-identity 
 
 az aks show --name $aksCluster --resource-group $resourceGroup
 
