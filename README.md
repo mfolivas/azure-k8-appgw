@@ -76,3 +76,4 @@ https://stacksimplify.com/azure-aks/azure-kubernetes-service-ingress-basics/
 https://docs.microsoft.com/en-us/azure/aks/ingress-basic
 https://kubernetes.io/docs/concepts/services-networking/ingress/
 https://docs.microsoft.com/en-us/azure/architecture/example-scenario/aks-agic/aks-agic
+https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/web-application-firewall/afds/waf-front-door-configure-ip-restriction.md
