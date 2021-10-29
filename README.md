@@ -64,9 +64,10 @@ The architecture of the Application Gateway Ingress Controller differs from that
 
 - Application Gateway Ingress Controller leverages the AKS' advanced networking, which allocates an IP address for each pod from the subnet shared with Application Gateway. Application Gateway Ingress Controller has direct access to all Kubernetes pods. This eliminates the need for data to pass through kubenet.
 
+References:
 
-Reference
-https://docs.microsoft.com/en-us/azure/aks/ingress-internal-ip#create-an-ingress-controller
+https://docs.microsoft.com/en-us/azure/aks/
+ingress-internal-ip#create-an-ingress-controller
 https://docs.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview
 https://docs.microsoft.com/en-us/azure/aks/kubernetes-helm
 https://docs.microsoft.com/en-us/azure/container-registry/container-registry-helm-repos
